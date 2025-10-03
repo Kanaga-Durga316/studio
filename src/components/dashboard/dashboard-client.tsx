@@ -353,7 +353,7 @@ export function DashboardClient() {
                 mode="single"
                 selected={selectedDay}
                 onSelect={setSelectedDay}
-                className="p-3"
+                className="w-full"
                 classNames={{
                     day_selected: "bg-primary text-primary-foreground hover:bg-primary/90",
                     day_today: "bg-accent text-accent-foreground",
