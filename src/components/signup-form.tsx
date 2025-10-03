@@ -14,46 +14,44 @@ import { Separator } from "@/components/ui/separator";
 import { Google, Microsoft } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { initiateEmailSignIn } from "@/firebase";
 import { useAuth } from "@/firebase/provider";
+import { initiateEmailSignUp } from "@/firebase/non-blocking-login";
 
-const loginSchema = z.object({
+const signUpSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
   password: z
     .string()
-    .min(6, { message: "Password must be at least 6 characters." }),
+    .min(8, { message: "Password must be at least 8 characters." }),
 });
 
-type LoginFormValues = z.infer<typeof loginSchema>;
+type SignUpFormValues = z.infer<typeof signUpSchema>;
 
-export function LoginForm() {
+export function SignUpForm() {
   const router = useRouter();
   const auth = useAuth();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<SignUpFormValues>({
+    resolver: zodResolver(signUpSchema),
     defaultValues: {
       email: "",
       password: "",
     },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  const onSubmit = (data: SignUpFormValues) => {
     setIsSubmitting(true);
-    initiateEmailSignIn(auth, data.email, data.password);
-    // We don't await here. The onAuthStateChanged listener will handle redirection.
-    // For now, let's keep the optimistic navigation for better UX.
-    setTimeout(() => {
-      toast({
-        title: "Login Attempted",
-        description: "Checking your credentials...",
-      });
-      router.push("/dashboard");
-      setIsSubmitting(false);
-    }, 1000);
+    initiateEmailSignUp(auth, data.email, data.password);
+    // Non-blocking, so we optimistically navigate.
+    // Auth state listener will handle the actual user session.
+    toast({
+      title: "Account Creation In Progress",
+      description: "We're setting things up for you. Redirecting to dashboard...",
+    });
+    router.push("/dashboard");
+    setIsSubmitting(false);
   };
 
   return (
@@ -75,23 +73,14 @@ export function LoginForm() {
           )}
         </div>
         <div className="grid gap-2 relative">
-          <div className="flex items-center">
-            <Label htmlFor="password">Password</Label>
-            <Link
-              href="#"
-              className="ml-auto inline-block text-sm underline"
-              onClick={(e) => { e.preventDefault(); toast({title: "Feature not implemented"});}}
-            >
-              Forgot your password?
-            </Link>
-          </div>
+          <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type={showPassword ? "text" : "password"}
             {...form.register("password")}
-            autoComplete="current-password"
+            autoComplete="new-password"
           />
-           <Button
+          <Button
             type="button"
             variant="ghost"
             size="icon"
@@ -112,7 +101,7 @@ export function LoginForm() {
           )}
         </div>
         <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? "Signing In..." : "Sign In"}
+          {isSubmitting ? "Creating Account..." : "Create Account"}
         </Button>
       </form>
       <div className="relative">
@@ -126,19 +115,19 @@ export function LoginForm() {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Button variant="outline" onClick={() => toast({title: "Feature not implemented"})}>
+        <Button variant="outline" onClick={() => toast({ title: "Feature not implemented" })}>
           <Google className="mr-2 h-4 w-4" />
           Google
         </Button>
-        <Button variant="outline" onClick={() => toast({title: "Feature not implemented"})}>
+        <Button variant="outline" onClick={() => toast({ title: "Feature not implemented" })}>
           <Microsoft className="mr-2 h-4 w-4" />
           Microsoft
         </Button>
       </div>
       <div className="mt-4 text-center text-sm">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="underline">
-          Sign up
+        Already have an account?{" "}
+        <Link href="/" className="underline">
+          Sign in
         </Link>
       </div>
     </div>

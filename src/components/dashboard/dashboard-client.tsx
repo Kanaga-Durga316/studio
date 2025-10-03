@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -306,6 +306,11 @@ export function DashboardClient() {
   const [events, setEvents] = useState<ScheduledEvent[]>(initialEvents);
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(new Date());
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const addEvent = (event: ScheduledEvent) => {
     setEvents((prev) => [...prev, event].sort((a, b) => a.start.getTime() - b.start.getTime()));
@@ -324,8 +329,12 @@ export function DashboardClient() {
     meeting: "bg-yellow-200 text-yellow-800",
   };
 
+  if (!isClient) {
+    return null; // or a loading spinner
+  }
+  
   return (
-    <div className="flex h-screen w-full flex-col bg-muted/40">
+    <div className="flex h-screen w-full flex-col">
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
         <h1 className="text-xl font-semibold">Calendar</h1>
         <div className="ml-auto">
