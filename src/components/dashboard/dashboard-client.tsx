@@ -13,6 +13,9 @@ import {
   Loader2,
   Edit,
   MoreHorizontal,
+  Mail,
+  Smartphone,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -58,6 +61,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "../ui/checkbox";
 
 const eventSchema = z.object({
   id: z.string().optional(),
@@ -68,6 +72,12 @@ const eventSchema = z.object({
   duration: z.coerce.number().positive("Duration must be a positive number."),
   preferences: z.string().optional(),
   category: z.enum(["personal", "work", "focus-time", "meeting"]),
+  reminder: z.string().optional(),
+  notifications: z.object({
+    email: z.boolean().default(false),
+    sms: z.boolean().default(false),
+    push: z.boolean().default(false),
+  }).optional(),
 });
 
 type EventFormValues = z.infer<typeof eventSchema>;
@@ -108,6 +118,8 @@ function EventForm({
         duration: (event.end.getTime() - event.start.getTime()) / 60000,
         category: event.category,
         preferences: "", // Preferences are not stored with the event
+        reminder: event.reminder,
+        notifications: event.notifications
       });
     } else {
       form.reset({
@@ -119,6 +131,8 @@ function EventForm({
         duration: 30,
         category: "meeting",
         preferences: "",
+        reminder: "15",
+        notifications: { email: true, sms: false, push: true }
       });
     }
   }, [isEditing, event, form]);
@@ -137,6 +151,8 @@ function EventForm({
       start: startDate,
       end: endDate,
       category: data.category,
+      reminder: data.reminder,
+      notifications: data.notifications
     };
     onSave(savedEvent);
     toast({
@@ -333,6 +349,76 @@ function EventForm({
         )}
       </div>
        <Separator />
+       {/* Advanced Notifications */}
+       <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4">
+        <div className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-accent-foreground fill-accent" />
+          <h3 className="text-lg font-semibold">Notifications</h3>
+        </div>
+        <div className="space-y-2">
+          <Label>Reminder</Label>
+           <Controller
+            control={form.control}
+            name="reminder"
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} value={field.value}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Set a reminder" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5 minutes before</SelectItem>
+                  <SelectItem value="15">15 minutes before</SelectItem>
+                  <SelectItem value="30">30 minutes before</SelectItem>
+                  <SelectItem value="60">1 hour before</SelectItem>
+                  <SelectItem value="1440">1 day before</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+        <div className="space-y-2">
+            <Label>Notify me via</Label>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-6 gap-2">
+                 <Controller
+                    name="notifications.email"
+                    control={form.control}
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2">
+                        <Checkbox id="notif-email" checked={field.value} onCheckedChange={field.onChange} />
+                        <Label htmlFor="notif-email" className="font-normal flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground"/> Email</Label>
+                      </div>
+                    )}
+                  />
+                  <Controller
+                    name="notifications.sms"
+                    control={form.control}
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2">
+                        <Checkbox id="notif-sms" checked={field.value} onCheckedChange={field.onChange} />
+                        <Label htmlFor="notif-sms" className="font-normal flex items-center gap-2"><Smartphone className="h-4 w-4 text-muted-foreground"/> SMS</Label>
+                      </div>
+                    )}
+                  />
+                  <Controller
+                    name="notifications.push"
+                    control={form.control}
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2">
+                        <Checkbox id="notif-push" checked={field.value} onCheckedChange={field.onChange} />
+                        <Label htmlFor="notif-push" className="font-normal flex items-center gap-2"><Bell className="h-4 w-4 text-muted-foreground"/> Push</Label>
+                      </div>
+                    )}
+                  />
+            </div>
+        </div>
+        <Alert variant="default" className="mt-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Under Development</AlertTitle>
+          <AlertDescription>
+            Configuring notifications is for demonstration purposes. Actual delivery of SMS, email, or push notifications is not yet implemented.
+          </AlertDescription>
+        </Alert>
+       </div>
       <div className="space-y-2">
         <Label htmlFor="description">Description (optional)</Label>
         <Textarea id="description" {...form.register("description")} />
@@ -417,7 +503,7 @@ export function DashboardClient() {
         <div className="md:col-span-1">
           <Card>
             <CardContent className="p-0">
-              <div className="flex items-center justify-center">
+               <div className="flex items-center justify-center p-0">
                 <Calendar
                   mode="single"
                   selected={selectedDay}

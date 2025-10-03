@@ -90,13 +90,29 @@
         "message": {
           "type": "string",
           "description": "Message to be displayed when the reminder is triggered."
+        },
+        "channels": {
+          "type": "object",
+          "description": "The notification channels for the reminder.",
+          "properties": {
+            "email": {
+              "type": "boolean"
+            },
+            "sms": {
+              "type": "boolean"
+            },
+            "push": {
+              "type": "boolean"
+            }
+          }
         }
       },
       "required": [
         "id",
         "eventId",
         "reminderTime",
-        "message"
+        "message",
+        "channels"
       ]
     }
   },
