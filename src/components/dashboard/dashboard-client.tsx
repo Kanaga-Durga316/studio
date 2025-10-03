@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Sparkles,
   Loader2,
+  Edit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -50,8 +51,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "../ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal } from "lucide-react";
 
 const eventSchema = z.object({
+  id: z.string().optional(),
   title: z.string().min(1, "Title is required."),
   description: z.string().optional(),
   date: z.date({ required_error: "Date is required." }),
@@ -68,29 +77,50 @@ type AiSuggestion = {
   reasoning: string;
 };
 
-// Sub-component for the event creation form
-function EventCreationForm({
-  addEvent,
+// Sub-component for the event creation/editing form
+function EventForm({
+  event,
+  onSave,
   closeSheet,
 }: {
-  addEvent: (event: ScheduledEvent) => void;
+  event?: ScheduledEvent | null;
+  onSave: (event: ScheduledEvent) => void;
   closeSheet: () => void;
 }) {
   const { toast } = useToast();
   const [isAiLoading, startAiTransition] = useTransition();
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
 
+  const isEditing = !!event;
+
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      date: new Date(),
-      time: format(new Date(), "HH:mm"),
-      duration: 30,
-      category: "meeting",
-    },
   });
+
+  useEffect(() => {
+    if (isEditing && event) {
+      form.reset({
+        id: event.id,
+        title: event.title,
+        description: event.description,
+        date: event.start,
+        time: format(event.start, "HH:mm"),
+        duration: (event.end.getTime() - event.start.getTime()) / 60000,
+        category: event.category,
+        preferences: "", // Preferences are not stored with the event
+      });
+    } else {
+      form.reset({
+        title: "",
+        description: "",
+        date: new Date(),
+        time: format(new Date(), "HH:mm"),
+        duration: 30,
+        category: "meeting",
+        preferences: "",
+      });
+    }
+  }, [isEditing, event, form]);
 
   const onSubmit: SubmitHandler<EventFormValues> = (data) => {
     const [hours, minutes] = data.time.split(":").map(Number);
@@ -99,18 +129,18 @@ function EventCreationForm({
 
     const endDate = new Date(startDate.getTime() + data.duration * 60000);
 
-    const newEvent: ScheduledEvent = {
-      id: crypto.randomUUID(),
+    const savedEvent: ScheduledEvent = {
+      id: isEditing && event ? event.id : crypto.randomUUID(),
       title: data.title,
       description: data.description,
       start: startDate,
       end: endDate,
       category: data.category,
     };
-    addEvent(newEvent);
+    onSave(savedEvent);
     toast({
-      title: "Event Created",
-      description: `"${data.title}" has been added to your calendar.`,
+      title: isEditing ? "Event Updated" : "Event Created",
+      description: `"${data.title}" has been ${isEditing ? 'updated' : 'added'}.`,
     });
     closeSheet();
   };
@@ -164,26 +194,26 @@ function EventCreationForm({
 
       <div className="space-y-2">
         <Label htmlFor="category">Category</Label>
-        <Select
-          onValueChange={(value) =>
-            form.setValue(
-              "category",
-              value as EventFormValues["category"],
-              { shouldValidate: true }
-            )
-          }
-          defaultValue={form.getValues("category")}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="meeting">Meeting</SelectItem>
-            <SelectItem value="work">Work</SelectItem>
-            <SelectItem value="focus-time">Focus Time</SelectItem>
-            <SelectItem value="personal">Personal</SelectItem>
-          </SelectContent>
-        </Select>
+        <Controller
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <Select
+              onValueChange={field.onChange}
+              value={field.value}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="meeting">Meeting</SelectItem>
+                <SelectItem value="work">Work</SelectItem>
+                <SelectItem value="focus-time">Focus Time</SelectItem>
+                <SelectItem value="personal">Personal</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -210,15 +240,25 @@ function EventCreationForm({
               <Calendar
                 mode="single"
                 selected={form.watch("date")}
-                onSelect={(date) => date && form.setValue("date", date)}
+                onSelect={(date) => date && form.setValue("date", date, { shouldValidate: true })}
                 initialFocus
               />
             </PopoverContent>
           </Popover>
+           {form.formState.errors.date && (
+            <p className="text-sm text-destructive">
+              {form.formState.errors.date.message}
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="time">Time</Label>
           <Input id="time" type="time" {...form.register("time")} />
+          {form.formState.errors.time && (
+            <p className="text-sm text-destructive">
+              {form.formState.errors.time.message}
+            </p>
+          )}
         </div>
       </div>
       <Separator />
@@ -236,6 +276,11 @@ function EventCreationForm({
               type="number"
               {...form.register("duration")}
             />
+            {form.formState.errors.duration && (
+              <p className="text-sm text-destructive">
+                {form.formState.errors.duration.message}
+              </p>
+            )}
           </div>
         </div>
         <div className="space-y-2">
@@ -295,7 +340,7 @@ function EventCreationForm({
         <SheetClose asChild>
           <Button variant="outline">Cancel</Button>
         </SheetClose>
-        <Button type="submit">Create Event</Button>
+        <Button type="submit">{isEditing ? "Save Changes" : "Create Event"}</Button>
       </SheetFooter>
     </form>
   );
@@ -306,14 +351,32 @@ export function DashboardClient() {
   const [events, setEvents] = useState<ScheduledEvent[]>(initialEvents);
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(new Date());
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<ScheduledEvent | null>(null);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const addEvent = (event: ScheduledEvent) => {
-    setEvents((prev) => [...prev, event].sort((a, b) => a.start.getTime() - b.start.getTime()));
+  const handleSaveEvent = (eventToSave: ScheduledEvent) => {
+    setEvents(prev => {
+        const eventExists = prev.some(e => e.id === eventToSave.id);
+        if (eventExists) {
+            return prev.map(e => e.id === eventToSave.id ? eventToSave : e).sort((a,b) => a.start.getTime() - b.start.getTime());
+        } else {
+            return [...prev, eventToSave].sort((a,b) => a.start.getTime() - b.start.getTime());
+        }
+    })
+  };
+  
+  const handleCreateNewEvent = () => {
+    setEditingEvent(null);
+    setIsSheetOpen(true);
+  };
+
+  const handleEditEvent = (event: ScheduledEvent) => {
+    setEditingEvent(event);
+    setIsSheetOpen(true);
   };
 
   const todaysEvents = useMemo(() => {
@@ -330,7 +393,11 @@ export function DashboardClient() {
   };
 
   if (!isClient) {
-    return null; // or a loading spinner
+    return (
+       <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
   
   return (
@@ -338,7 +405,7 @@ export function DashboardClient() {
       <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
         <h1 className="text-xl font-semibold">Calendar</h1>
         <div className="ml-auto">
-          <Button onClick={() => setIsSheetOpen(true)}>
+          <Button onClick={handleCreateNewEvent}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Create Event
           </Button>
@@ -348,13 +415,15 @@ export function DashboardClient() {
       <main className="flex-1 p-4 sm:px-6 sm:py-0 grid md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
           <Card>
-            <CardContent className="p-0 flex items-center justify-center">
-              <Calendar
-                mode="single"
-                selected={selectedDay}
-                onSelect={setSelectedDay}
-                className="scale-90"
-              />
+            <CardContent className="p-0">
+               <div className="flex items-center justify-center">
+                 <Calendar
+                    mode="single"
+                    selected={selectedDay}
+                    onSelect={setSelectedDay}
+                    className="scale-95"
+                  />
+               </div>
             </CardContent>
           </Card>
         </div>
@@ -379,9 +448,24 @@ export function DashboardClient() {
                         <div className="p-4 flex-1">
                             <div className="flex justify-between items-start">
                                 <CardTitle className="text-lg">{event.title}</CardTitle>
+                                <div className="flex items-center gap-2">
                                 <Badge variant="outline" className={cn(categoryColors[event.category])}>
                                 {event.category.replace("-", " ")}
                                 </Badge>
+                                 <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={() => handleEditEvent(event)}>
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                             </div>
                           
                           {event.description && <p className="text-sm text-muted-foreground mt-1">{event.description}</p>}
@@ -405,15 +489,15 @@ export function DashboardClient() {
         <SheetContent className="sm:max-w-lg w-[90vw]">
           <ScrollArea className="h-full pr-6">
             <SheetHeader>
-              <SheetTitle>Create a New Event</SheetTitle>
+              <SheetTitle>{editingEvent ? "Edit Event" : "Create a New Event"}</SheetTitle>
               <SheetDescription>
-                Fill out the details for your new event. Use the AI scheduler to
-                find the perfect time.
+                {editingEvent ? "Update the details for your event." : "Fill out the details for your new event. Use the AI scheduler to find the perfect time."}
               </SheetDescription>
             </SheetHeader>
             <div className="py-4">
-              <EventCreationForm
-                addEvent={addEvent}
+              <EventForm
+                event={editingEvent}
+                onSave={handleSaveEvent}
                 closeSheet={() => setIsSheetOpen(false)}
               />
             </div>
