@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useTransition, useEffect } from "react";
-import { useForm, type SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, isSameDay, parseISO } from "date-fns";
@@ -12,6 +12,7 @@ import {
   Sparkles,
   Loader2,
   Edit,
+  MoreHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
 
 const eventSchema = z.object({
   id: z.string().optional(),
@@ -415,15 +415,15 @@ export function DashboardClient() {
       <main className="flex-1 p-4 sm:px-6 sm:py-0 grid md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
           <Card>
-            <CardContent className="p-0">
-               <div className="flex items-center justify-center">
-                 <Calendar
-                    mode="single"
-                    selected={selectedDay}
-                    onSelect={setSelectedDay}
-                    className="scale-95"
-                  />
-               </div>
+            <CardContent>
+              <div className="flex items-center justify-center p-0">
+                <Calendar
+                  mode="single"
+                  selected={selectedDay}
+                  onSelect={setSelectedDay}
+                  className="scale-95"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
