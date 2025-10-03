@@ -91,7 +91,7 @@ function EventForm({
   const [isAiLoading, startAiTransition] = useTransition();
   const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
 
-  const isEditing = !!event;
+  const isEditing = !!event?.id;
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
@@ -111,6 +111,7 @@ function EventForm({
       });
     } else {
       form.reset({
+        id: undefined,
         title: "",
         description: "",
         date: new Date(),
@@ -130,7 +131,7 @@ function EventForm({
     const endDate = new Date(startDate.getTime() + data.duration * 60000);
 
     const savedEvent: ScheduledEvent = {
-      id: isEditing && event ? event.id : crypto.randomUUID(),
+      id: data.id || crypto.randomUUID(),
       title: data.title,
       description: data.description,
       start: startDate,
@@ -415,8 +416,8 @@ export function DashboardClient() {
       <main className="flex-1 p-4 sm:px-6 sm:py-0 grid md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
           <Card>
-            <CardContent>
-              <div className="flex items-center justify-center p-0">
+            <CardContent className="p-0">
+              <div className="flex items-center justify-center">
                 <Calendar
                   mode="single"
                   selected={selectedDay}
