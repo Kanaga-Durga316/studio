@@ -473,10 +473,17 @@ export function DashboardClient() {
   }, [events, selectedDay]);
 
   const categoryColors = {
-    personal: "bg-green-200 text-green-800",
-    work: "bg-blue-200 text-blue-800",
-    "focus-time": "bg-purple-200 text-purple-800",
-    meeting: "bg-yellow-200 text-yellow-800",
+    personal: "bg-green-100 border-green-200 text-green-800",
+    work: "bg-blue-100 border-blue-200 text-blue-800",
+    "focus-time": "bg-purple-100 border-purple-200 text-purple-800",
+    meeting: "bg-yellow-100 border-yellow-200 text-yellow-800",
+  };
+  
+  const categoryBadgeColors = {
+    personal: "bg-green-200 text-green-800 hover:bg-green-200/80",
+    work: "bg-blue-200 text-blue-800 hover:bg-blue-200/80",
+    "focus-time": "bg-purple-200 text-purple-800 hover:bg-purple-200/80",
+    meeting: "bg-yellow-200 text-yellow-800 hover:bg-yellow-200/80",
   };
 
   if (!isClient) {
@@ -527,8 +534,8 @@ export function DashboardClient() {
                 {todaysEvents.length > 0 ? (
                   <div className="space-y-4">
                     {todaysEvents.map((event) => (
-                      <Card key={event.id} className="flex">
-                        <div className="flex flex-col items-center justify-center p-4 border-r">
+                      <Card key={event.id} className={cn("flex", categoryColors[event.category])}>
+                        <div className="flex flex-col items-center justify-center p-4 border-r border-inherit">
                            <div className="text-sm font-semibold">{format(event.start, "h:mm")}</div>
                            <div className="text-xs text-muted-foreground">{format(event.start, "a")}</div>
                         </div>
@@ -536,12 +543,12 @@ export function DashboardClient() {
                             <div className="flex justify-between items-start">
                                 <CardTitle className="text-lg">{event.title}</CardTitle>
                                 <div className="flex items-center gap-2">
-                                <Badge variant="outline" className={cn(categoryColors[event.category])}>
+                                <Badge variant="secondary" className={cn(categoryBadgeColors[event.category])}>
                                 {event.category.replace("-", " ")}
                                 </Badge>
                                  <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 text-inherit hover:bg-black/10">
                                         <MoreHorizontal className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
@@ -555,7 +562,7 @@ export function DashboardClient() {
                                 </div>
                             </div>
                           
-                          {event.description && <p className="text-sm text-muted-foreground mt-1">{event.description}</p>}
+                          {event.description && <p className="text-sm text-inherit/80 mt-1">{event.description}</p>}
                         </div>
                       </Card>
                     ))}
