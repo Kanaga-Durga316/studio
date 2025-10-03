@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Eye, EyeOff } from "lucide-react";
+import { FirebaseError } from "firebase/app";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { Google, Microsoft } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useAuth } from "@/firebase/provider";
-import { initiateEmailSignUp } from "@/firebase/non-blocking-login";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 const signUpSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
@@ -41,17 +42,50 @@ export function SignUpForm() {
     },
   });
 
-  const onSubmit = (data: SignUpFormValues) => {
+  const onSubmit = async (data: SignUpFormValues) => {
     setIsSubmitting(true);
-    initiateEmailSignUp(auth, data.email, data.password);
-    // Non-blocking, so we optimistically navigate.
-    // Auth state listener will handle the actual user session.
-    toast({
-      title: "Account Creation In Progress",
-      description: "We're setting things up for you. Redirecting to dashboard...",
-    });
-    router.push("/dashboard");
-    setIsSubmitting(false);
+    try {
+      await createUserWithEmailAndPassword(auth, data.email, data.password);
+      toast({
+        title: "Account Created!",
+        description: "Welcome! Redirecting you to the dashboard.",
+      });
+      router.push("/dashboard");
+    } catch (error) {
+      console.error("Sign Up Error:", error);
+      let title = "An unexpected error occurred.";
+      let description = "Please try again later.";
+
+      if (error instanceof FirebaseError) {
+        switch (error.code) {
+          case "auth/email-already-in-use":
+            title = "Email Already in Use";
+            description =
+              "This email is already associated with an account. Please sign in.";
+            break;
+          case "auth/invalid-email":
+            title = "Invalid Email";
+            description = "Please enter a valid email address.";
+            break;
+          case "auth/weak-password":
+            title = "Weak Password";
+            description = "Your password should be at least 6 characters long.";
+            break;
+          default:
+            title = "Sign-Up Error";
+            description = error.message;
+            break;
+        }
+      }
+
+      toast({
+        variant: "destructive",
+        title: title,
+        description: description,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

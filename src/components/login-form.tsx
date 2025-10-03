@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Eye, EyeOff } from "lucide-react";
+import { FirebaseError } from "firebase/app";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +15,8 @@ import { Separator } from "@/components/ui/separator";
 import { Google, Microsoft } from "@/components/icons";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { initiateEmailSignIn } from "@/firebase";
 import { useAuth } from "@/firebase/provider";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
@@ -41,19 +42,47 @@ export function LoginForm() {
     },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  const onSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
-    initiateEmailSignIn(auth, data.email, data.password);
-    // We don't await here. The onAuthStateChanged listener will handle redirection.
-    // For now, let's keep the optimistic navigation for better UX.
-    setTimeout(() => {
+    try {
+      await signInWithEmailAndPassword(auth, data.email, data.password);
       toast({
-        title: "Login Attempted",
-        description: "Checking your credentials...",
+        title: "Login Successful",
+        description: "Welcome back! Redirecting you to the dashboard.",
       });
       router.push("/dashboard");
+    } catch (error) {
+      console.error("Login Error:", error);
+      let title = "An unexpected error occurred.";
+      let description = "Please try again later.";
+
+      if (error instanceof FirebaseError) {
+        switch (error.code) {
+          case "auth/user-not-found":
+          case "auth/wrong-password":
+          case "auth/invalid-credential":
+            title = "Invalid Credentials";
+            description = "The email or password you entered is incorrect.";
+            break;
+          case "auth/invalid-email":
+            title = "Invalid Email";
+            description = "Please enter a valid email address.";
+            break;
+          default:
+            title = "Authentication Error";
+            description = error.message;
+            break;
+        }
+      }
+      
+      toast({
+        variant: "destructive",
+        title: title,
+        description: description,
+      });
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   return (
