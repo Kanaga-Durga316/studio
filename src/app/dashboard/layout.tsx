@@ -5,7 +5,6 @@ import {
   History,
   Layers,
   LogOut,
-  PlusCircle,
   Timer,
 } from 'lucide-react';
 
@@ -24,6 +23,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarInset,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -114,9 +114,9 @@ export default function DashboardLayout({
           </DropdownMenu>
         </SidebarFooter>
       </Sidebar>
-      <main className="flex-1 md:ml-[--sidebar-width-icon] lg:ml-[--sidebar-width]">
+      <SidebarInset>
         {children}
-      </main>
+      </SidebarInset>
     </SidebarProvider>
   );
 }
