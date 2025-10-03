@@ -41,9 +41,7 @@ export default function DashboardLayout({
       <Sidebar>
         <SidebarHeader className="p-4">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <SidebarTrigger />
-            </Button>
+            <SidebarTrigger className="md:hidden" />
             <Link href="/dashboard" className="flex items-center gap-2 font-semibold font-headline">
               <Layers className="h-6 w-6 text-primary-foreground fill-primary" />
               <span className="text-lg">TimeFlow</span>
