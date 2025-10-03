@@ -1,0 +1,420 @@
+"use client";
+
+import { useState, useMemo, useTransition } from "react";
+import { useForm, type SubmitHandler } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { format, isSameDay, parseISO } from "date-fns";
+import {
+  CalendarIcon,
+  PlusCircle,
+  AlertTriangle,
+  Sparkles,
+  Loader2,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import type { ScheduledEvent } from "@/lib/types";
+import { scheduledEvents as initialEvents } from "@/lib/mock-data";
+import { getAiSuggestion } from "@/lib/actions";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "../ui/separator";
+
+const eventSchema = z.object({
+  title: z.string().min(1, "Title is required."),
+  description: z.string().optional(),
+  date: z.date({ required_error: "Date is required." }),
+  time: z.string().min(1, "Time is required."),
+  duration: z.coerce.number().positive("Duration must be a positive number."),
+  preferences: z.string().optional(),
+  category: z.enum(["personal", "work", "focus-time", "meeting"]),
+});
+
+type EventFormValues = z.infer<typeof eventSchema>;
+
+type AiSuggestion = {
+  suggestedTime: string;
+  reasoning: string;
+};
+
+// Sub-component for the event creation form
+function EventCreationForm({
+  addEvent,
+  closeSheet,
+}: {
+  addEvent: (event: ScheduledEvent) => void;
+  closeSheet: () => void;
+}) {
+  const { toast } = useToast();
+  const [isAiLoading, startAiTransition] = useTransition();
+  const [aiSuggestion, setAiSuggestion] = useState<AiSuggestion | null>(null);
+
+  const form = useForm<EventFormValues>({
+    resolver: zodResolver(eventSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      date: new Date(),
+      time: format(new Date(), "HH:mm"),
+      duration: 30,
+      category: "meeting",
+    },
+  });
+
+  const onSubmit: SubmitHandler<EventFormValues> = (data) => {
+    const [hours, minutes] = data.time.split(":").map(Number);
+    const startDate = new Date(data.date);
+    startDate.setHours(hours, minutes);
+
+    const endDate = new Date(startDate.getTime() + data.duration * 60000);
+
+    const newEvent: ScheduledEvent = {
+      id: crypto.randomUUID(),
+      title: data.title,
+      description: data.description,
+      start: startDate,
+      end: endDate,
+      category: data.category,
+    };
+    addEvent(newEvent);
+    toast({
+      title: "Event Created",
+      description: `"${data.title}" has been added to your calendar.`,
+    });
+    closeSheet();
+  };
+
+  const handleAiSuggest = () => {
+    const formData = new FormData();
+    formData.append("duration", form.getValues("duration").toString());
+    formData.append("preferences", form.getValues("preferences") || "");
+
+    startAiTransition(async () => {
+      setAiSuggestion(null);
+      const result = await getAiSuggestion(formData);
+      if (result.success && result.data) {
+        setAiSuggestion(result.data);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "AI Suggestion Failed",
+          description: result.error || "Could not generate a suggestion.",
+        });
+      }
+    });
+  };
+
+  const applyAiSuggestion = () => {
+    if (aiSuggestion) {
+      const suggestedDate = parseISO(aiSuggestion.suggestedTime);
+      form.setValue("date", suggestedDate, { shouldValidate: true });
+      form.setValue("time", format(suggestedDate, "HH:mm"), {
+        shouldValidate: true,
+      });
+      toast({
+        title: "Suggestion Applied",
+        description: "The suggested time has been set in the form.",
+      });
+      setAiSuggestion(null);
+    }
+  };
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="title">Event Title</Label>
+        <Input id="title" {...form.register("title")} />
+        {form.formState.errors.title && (
+          <p className="text-sm text-destructive">
+            {form.formState.errors.title.message}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="category">Category</Label>
+        <Select
+          onValueChange={(value) =>
+            form.setValue(
+              "category",
+              value as EventFormValues["category"],
+              { shouldValidate: true }
+            )
+          }
+          defaultValue={form.getValues("category")}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="meeting">Meeting</SelectItem>
+            <SelectItem value="work">Work</SelectItem>
+            <SelectItem value="focus-time">Focus Time</SelectItem>
+            <SelectItem value="personal">Personal</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="date">Date</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !form.watch("date") && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {form.watch("date") ? (
+                  format(form.watch("date"), "PPP")
+                ) : (
+                  <span>Pick a date</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={form.watch("date")}
+                onSelect={(date) => date && form.setValue("date", date)}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="time">Time</Label>
+          <Input id="time" type="time" {...form.register("time")} />
+        </div>
+      </div>
+      <Separator />
+      {/* AI Scheduling Section */}
+      <div className="space-y-4 rounded-lg border border-border/60 bg-background p-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-accent-foreground fill-accent" />
+          <h3 className="text-lg font-semibold">Smart Schedule</h3>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="duration">Duration (minutes)</Label>
+            <Input
+              id="duration"
+              type="number"
+              {...form.register("duration")}
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="preferences">Preferences (optional)</Label>
+          <Textarea
+            id="preferences"
+            placeholder="e.g., 'I prefer mornings', 'Not during lunch hours'"
+            {...form.register("preferences")}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleAiSuggest}
+          disabled={isAiLoading || !form.watch("duration")}
+          className="w-full"
+        >
+          {isAiLoading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Sparkles className="mr-2 h-4 w-4" />
+          )}
+          Suggest Optimal Time with AI
+        </Button>
+        {aiSuggestion && (
+          <Alert>
+            <Sparkles className="h-4 w-4" />
+            <AlertTitle>AI Suggestion</AlertTitle>
+            <AlertDescription className="space-y-2">
+              <p>
+                <strong>Suggested Time:</strong>{" "}
+                {format(
+                  parseISO(aiSuggestion.suggestedTime),
+                  "MMMM d, yyyy 'at' h:mm a"
+                )}
+              </p>
+              <p>
+                <strong>Reasoning:</strong> {aiSuggestion.reasoning}
+              </p>
+              <Button
+                size="sm"
+                className="mt-2"
+                onClick={applyAiSuggestion}
+              >
+                Apply Suggestion
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
+       <Separator />
+      <div className="space-y-2">
+        <Label htmlFor="description">Description (optional)</Label>
+        <Textarea id="description" {...form.register("description")} />
+      </div>
+      <SheetFooter>
+        <SheetClose asChild>
+          <Button variant="outline">Cancel</Button>
+        </SheetClose>
+        <Button type="submit">Create Event</Button>
+      </SheetFooter>
+    </form>
+  );
+}
+
+// Main client component for the dashboard
+export function DashboardClient() {
+  const [events, setEvents] = useState<ScheduledEvent[]>(initialEvents);
+  const [selectedDay, setSelectedDay] = useState<Date | undefined>(new Date());
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  const addEvent = (event: ScheduledEvent) => {
+    setEvents((prev) => [...prev, event].sort((a, b) => a.start.getTime() - b.start.getTime()));
+  };
+
+  const todaysEvents = useMemo(() => {
+    return selectedDay
+      ? events.filter((event) => isSameDay(event.start, selectedDay))
+      : [];
+  }, [events, selectedDay]);
+
+  const categoryColors = {
+    personal: "bg-green-200 text-green-800",
+    work: "bg-blue-200 text-blue-800",
+    "focus-time": "bg-purple-200 text-purple-800",
+    meeting: "bg-yellow-200 text-yellow-800",
+  };
+
+  return (
+    <div className="flex h-screen w-full flex-col bg-muted/40">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
+        <h1 className="text-xl font-semibold">Calendar</h1>
+        <div className="ml-auto">
+          <Button onClick={() => setIsSheetOpen(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Create Event
+          </Button>
+        </div>
+      </header>
+
+      <main className="flex-1 p-4 sm:px-6 sm:py-0 grid md:grid-cols-3 gap-8">
+        <div className="md:col-span-1">
+          <Card>
+            <CardContent className="p-0">
+              <Calendar
+                mode="single"
+                selected={selectedDay}
+                onSelect={setSelectedDay}
+                className="p-3"
+                classNames={{
+                    day_selected: "bg-primary text-primary-foreground hover:bg-primary/90",
+                    day_today: "bg-accent text-accent-foreground",
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="md:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Events for {selectedDay ? format(selectedDay, "MMMM d, yyyy") : "Today"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[65vh]">
+                {todaysEvents.length > 0 ? (
+                  <div className="space-y-4">
+                    {todaysEvents.map((event) => (
+                      <Card key={event.id} className="flex">
+                        <div className="flex flex-col items-center justify-center p-4 border-r">
+                           <div className="text-sm font-semibold">{format(event.start, "h:mm")}</div>
+                           <div className="text-xs text-muted-foreground">{format(event.start, "a")}</div>
+                        </div>
+                        <div className="p-4 flex-1">
+                            <div className="flex justify-between items-start">
+                                <CardTitle className="text-lg">{event.title}</CardTitle>
+                                <Badge variant="outline" className={cn(categoryColors[event.category])}>
+                                {event.category.replace("-", " ")}
+                                </Badge>
+                            </div>
+                          
+                          {event.description && <p className="text-sm text-muted-foreground mt-1">{event.description}</p>}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center h-48 rounded-lg border-2 border-dashed border-gray-300">
+                    <CalendarIcon className="w-12 h-12 text-muted-foreground" />
+                    <p className="mt-4 text-muted-foreground">No events scheduled for this day.</p>
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent className="sm:max-w-lg w-[90vw]">
+          <ScrollArea className="h-full pr-6">
+            <SheetHeader>
+              <SheetTitle>Create a New Event</SheetTitle>
+              <SheetDescription>
+                Fill out the details for your new event. Use the AI scheduler to
+                find the perfect time.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="py-4">
+              <EventCreationForm
+                addEvent={addEvent}
+                closeSheet={() => setIsSheetOpen(false)}
+              />
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
