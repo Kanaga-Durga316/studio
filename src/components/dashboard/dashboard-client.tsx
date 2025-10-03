@@ -349,18 +349,12 @@ export function DashboardClient() {
         <div className="md:col-span-1">
           <Card>
             <CardContent className="p-0">
-               <div className="p-4">
                 <Calendar
                     mode="single"
                     selected={selectedDay}
                     onSelect={setSelectedDay}
-                    className="w-full"
-                    classNames={{
-                        day_selected: "bg-primary text-primary-foreground hover:bg-primary/90",
-                        day_today: "bg-accent text-accent-foreground",
-                    }}
+                    className="p-3"
                 />
-               </div>
             </CardContent>
           </Card>
         </div>
@@ -429,3 +423,5 @@ export function DashboardClient() {
     </div>
   );
 }
+
+    
