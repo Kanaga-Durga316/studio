@@ -1,0 +1,126 @@
+/**
+ * @fileoverview Firestore Security Rules for TimeFlow application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model. Users can only
+ * create, read, update, and delete their own data (users, events, reminders).
+ *
+ * Data Structure:
+ * The Firestore database is structured as follows:
+ * /users/{userId} - User profile data.
+ * /users/{userId}/events/{eventId} - Events created by a user.
+ * /users/{userId}/events/{eventId}/reminders/{reminderId} - Reminders for an event.
+ *
+ * Key Security Decisions:
+ * - Users can only manage their own data; cross-user access is denied.
+ * - Listing all users is disallowed to protect user privacy.
+ * - Data consistency is enforced by validating the 'userId' field against the path.
+ *
+ * Denormalization for Authorization:
+ * The 'userId' field is denormalized in the Event and Reminder documents to
+ * ensure authorization independence, avoiding costly `get()` calls to parent documents.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * @description Manages user profiles. Only the user themselves can create, read, update, or delete their own profile.
+     * @path /users/{userId}
+     * @allow (create) - User 'abc' with auth 'abc' can create their profile.
+     * @allow (get) - User 'abc' with auth 'abc' can read their profile.
+     * @allow (update) - User 'abc' with auth 'abc' can update their profile.
+     * @allow (delete) - User 'abc' with auth 'abc' can delete their profile.
+     * @deny (create) - User 'def' with auth 'abc' cannot create profile 'abc'.
+     * @deny (get) - User 'def' with auth 'abc' cannot read profile 'abc'.
+     * @deny (update) - User 'def' with auth 'abc' cannot update profile 'abc'.
+     * @deny (delete) - User 'def' with auth 'abc' cannot delete profile 'abc'.
+     * @principle Enforces document ownership for all operations.
+     */
+    match /users/{userId} {
+      // Verify user is signed in
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false; // Do not allow listing all users
+
+      // Allow the user to create their own document, enforcing that the ID matches their auth UID.
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+
+      // On update, ensure the user is signed in, is the owner, and that the user ID cannot be changed.
+      allow update: if isSignedIn() && isOwner(userId) && resource.data.id == request.resource.data.id;
+
+      // Only allow the owner to delete the document, but ensure the document exists first
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+    }
+
+    /**
+     * @description Manages events for a specific user. Only the owner can create, read, update, or delete events.
+     * @path /users/{userId}/events/{eventId}
+     * @allow (create) - User 'abc' with auth 'abc' can create an event under their profile.
+     * @allow (get) - User 'abc' with auth 'abc' can read an event under their profile.
+     * @allow (update) - User 'abc' with auth 'abc' can update an event under their profile.
+     * @allow (delete) - User 'abc' with auth 'abc' can delete an event under their profile.
+     * @deny (create) - User 'def' with auth 'abc' cannot create an event under user 'abc'.
+     * @deny (get) - User 'def' with auth 'abc' cannot read an event under user 'abc'.
+     * @deny (update) - User 'def' with auth 'abc' cannot update an event under user 'abc'.
+     * @deny (delete) - User 'def' with auth 'abc' cannot delete an event under user 'abc'.
+     * @principle Enforces document ownership for writes.
+     */
+    match /users/{userId}/events/{eventId} {
+      // Anyone can read events
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+
+      // The user must be signed in and the owner to create an event
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
+
+      // On update, ensure the user is signed in, is the owner, and that the user ID cannot be changed.
+      allow update: if isSignedIn() && isOwner(userId) && resource.data.userId == request.resource.data.userId;
+
+      // Only allow the owner to delete the document, but ensure the document exists first
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+    }
+
+    /**
+     * @description Manages reminders for events. Only the owner of the event can manage its reminders.
+     * @path /users/{userId}/events/{eventId}/reminders/{reminderId}
+     * @allow (create) - User 'abc' with auth 'abc' can create a reminder for their event.
+     * @allow (get) - User 'abc' with auth 'abc' can read a reminder for their event.
+     * @allow (update) - User 'abc' with auth 'abc' can update a reminder for their event.
+     * @allow (delete) - User 'abc' with auth 'abc' can delete a reminder for their event.
+     * @deny (create) - User 'def' with auth 'abc' cannot create a reminder under user 'abc's event.
+     * @deny (get) - User 'def' with auth 'abc' cannot read a reminder under user 'abc's event.
+     * @deny (update) - User 'def' with auth 'abc' cannot update a reminder under user 'abc's event.
+     * @deny (delete) - User 'def' with auth 'abc' cannot delete a reminder under user 'abc's event.
+     * @principle Enforces document ownership for writes.
+     */
+    match /users/{userId}/events/{eventId}/reminders/{reminderId} {
+      // Anyone can read reminders
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+
+      // The user must be signed in and the owner to create an reminder
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.eventId == eventId;
+
+      // On update, ensure the user is signed in, is the owner, and that the eventId cannot be changed.
+      allow update: if isSignedIn() && isOwner(userId) && resource.data.eventId == request.resource.data.eventId;
+
+      // Only allow the owner to delete the document, but ensure the document exists first
+      allow delete: if isSignedIn() && isExistingOwner(userId);
+    }
+
+    // Helper function to determine if the user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper function to determine if the requesting user is the owner of the document.
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Helper function to determine if the requesting user is the owner of the document and the document exists.
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+  }
+}
