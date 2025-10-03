@@ -348,13 +348,13 @@ export function DashboardClient() {
       <main className="flex-1 p-4 sm:px-6 sm:py-0 grid md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
           <Card>
-            <CardContent className="p-0">
-                <Calendar
-                    mode="single"
-                    selected={selectedDay}
-                    onSelect={setSelectedDay}
-                    className="p-3"
-                />
+            <CardContent className="p-0 flex items-center justify-center">
+              <Calendar
+                mode="single"
+                selected={selectedDay}
+                onSelect={setSelectedDay}
+                className="scale-90"
+              />
             </CardContent>
           </Card>
         </div>
@@ -423,5 +423,3 @@ export function DashboardClient() {
     </div>
   );
 }
-
-    
