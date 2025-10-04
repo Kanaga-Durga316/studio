@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition, useEffect } from "react";
 import { useForm, type SubmitHandler, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format, isSameDay, parseISO } from "date-fns";
+import { format, isSameDay, parseISO } from "date-ns";
 import {
   CalendarIcon,
   PlusCircle,
@@ -16,6 +16,8 @@ import {
   Mail,
   Smartphone,
   Bell,
+  Search,
+  Filter,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -60,6 +62,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator as DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "../ui/checkbox";
 
@@ -433,6 +438,13 @@ function EventForm({
   );
 }
 
+const eventCategories: ScheduledEvent["category"][] = [
+  "meeting",
+  "work",
+  "personal",
+  "focus-time",
+];
+
 // Main client component for the dashboard
 export function DashboardClient() {
   const [events, setEvents] = useState<ScheduledEvent[]>(initialEvents);
@@ -440,6 +452,8 @@ export function DashboardClient() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<ScheduledEvent | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<Set<ScheduledEvent['category']>>(new Set(eventCategories));
 
   useEffect(() => {
     setIsClient(true);
@@ -465,12 +479,36 @@ export function DashboardClient() {
     setEditingEvent(event);
     setIsSheetOpen(true);
   };
+  
+  const handleCategoryFilterChange = (category: ScheduledEvent['category']) => {
+    setSelectedCategories(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(category)) {
+            newSet.delete(category);
+        } else {
+            newSet.add(category);
+        }
+        return newSet;
+    });
+  };
 
-  const todaysEvents = useMemo(() => {
-    return selectedDay
+  const filteredEvents = useMemo(() => {
+    const dailyEvents = selectedDay
       ? events.filter((event) => isSameDay(event.start, selectedDay))
       : [];
-  }, [events, selectedDay]);
+      
+    return dailyEvents.filter(event => {
+        const searchMatch = searchTerm.length > 0 ? 
+            event.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            event.description?.toLowerCase().includes(searchTerm.toLowerCase()) 
+            : true;
+        
+        const categoryMatch = selectedCategories.size === 0 || selectedCategories.has(event.category);
+
+        return searchMatch && categoryMatch;
+    });
+
+  }, [events, selectedDay, searchTerm, selectedCategories]);
 
   const categoryColors = {
     personal: "bg-green-100 border-green-200 text-green-800",
@@ -510,7 +548,7 @@ export function DashboardClient() {
         <div className="md:col-span-1">
           <Card>
             <CardContent className="p-0">
-               <div className="flex items-center justify-center p-0">
+               <div className="flex items-center justify-center">
                 <Calendar
                   mode="single"
                   selected={selectedDay}
@@ -528,12 +566,46 @@ export function DashboardClient() {
               <CardTitle>
                 Events for {selectedDay ? format(selectedDay, "MMMM d, yyyy") : "Today"}
               </CardTitle>
+               <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="search"
+                      placeholder="Search events..."
+                      className="w-full rounded-lg bg-background pl-8"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="shrink-0">
+                        <Filter className="mr-2 h-4 w-4" />
+                        Filter by Category
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56">
+                      <DropdownMenuLabel>Event Categories</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {eventCategories.map((category) => (
+                        <DropdownMenuCheckboxItem
+                          key={category}
+                          checked={selectedCategories.has(category)}
+                          onCheckedChange={() => handleCategoryFilterChange(category)}
+                          className="capitalize"
+                        >
+                          {category.replace("-", " ")}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[65vh]">
-                {todaysEvents.length > 0 ? (
+              <ScrollArea className="h-[58vh]">
+                {filteredEvents.length > 0 ? (
                   <div className="space-y-4">
-                    {todaysEvents.map((event) => (
+                    {filteredEvents.map((event) => (
                       <Card key={event.id} className={cn("flex", categoryColors[event.category])}>
                         <div className="flex flex-col items-center justify-center p-4 border-r border-inherit">
                            <div className="text-sm font-semibold">{format(event.start, "h:mm")}</div>
@@ -571,6 +643,7 @@ export function DashboardClient() {
                   <div className="flex flex-col items-center justify-center text-center h-48 rounded-lg border-2 border-dashed border-gray-300">
                     <CalendarIcon className="w-12 h-12 text-muted-foreground" />
                     <p className="mt-4 text-muted-foreground">No events scheduled for this day.</p>
+                     {searchTerm && <p className="text-sm text-muted-foreground">Try adjusting your search or filters.</p>}
                   </div>
                 )}
               </ScrollArea>
@@ -601,3 +674,5 @@ export function DashboardClient() {
     </div>
   );
 }
+
+    
